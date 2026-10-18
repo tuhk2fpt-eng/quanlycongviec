@@ -1312,7 +1312,7 @@
       try { localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(appData)); } catch (e) {}
     }
 
-    function initRealtimeFirebase() {
+        function initRealtimeFirebase() {
       loadFromLocalCacheFirst();
       try {
         if (!firebase.apps.length) firebase.initializeApp({ databaseURL: DATABASE_URL });
@@ -1323,6 +1323,7 @@
           updateConnectionBadge(snap.val() === true);
         });
 
+        // Lắng nghe dữ liệu kèm theo hàm bắt lỗi phân quyền (nếu bị chặn Rules)
         rootRef.on('value', async (snapshot) => {
           let val = snapshot.val();
           if (!val) {
@@ -1348,8 +1349,15 @@
             return;
           }
           renderAll();
+        }, (error) => {
+          console.error("Lỗi quyền truy cập Firebase Rules:", error);
+          alert("Lỗi: Không có quyền đọc/ghi dữ liệu trên Firebase. Vui lòng kiểm tra lại tab Rules trong Firebase!");
         });
-      } catch (err) { updateConnectionBadge(false); }
+
+      } catch (err) { 
+        console.error("Lỗi khởi tạo Firebase:", err);
+        updateConnectionBadge(false); 
+      }
     }
 
     function forceSyncFromCloud() {
