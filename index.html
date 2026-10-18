@@ -1312,7 +1312,7 @@
       try { localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(appData)); } catch (e) {}
     }
 
-        function initRealtimeFirebase() {
+    function initRealtimeFirebase() {
       loadFromLocalCacheFirst();
       try {
         if (!firebase.apps.length) firebase.initializeApp({ databaseURL: DATABASE_URL });
@@ -1323,7 +1323,6 @@
           updateConnectionBadge(snap.val() === true);
         });
 
-        // Lắng nghe dữ liệu kèm theo hàm bắt lỗi phân quyền (nếu bị chặn Rules)
         rootRef.on('value', async (snapshot) => {
           let val = snapshot.val();
           if (!val) {
@@ -1349,15 +1348,8 @@
             return;
           }
           renderAll();
-        }, (error) => {
-          console.error("Lỗi quyền truy cập Firebase Rules:", error);
-          alert("Lỗi: Không có quyền đọc/ghi dữ liệu trên Firebase. Vui lòng kiểm tra lại tab Rules trong Firebase!");
         });
-
-      } catch (err) { 
-        console.error("Lỗi khởi tạo Firebase:", err);
-        updateConnectionBadge(false); 
-      }
+      } catch (err) { updateConnectionBadge(false); }
     }
 
     function forceSyncFromCloud() {
@@ -2092,81 +2084,31 @@
     }
 
     function saveTemplateForm(e) {
-        function saveTemplateForm(e) {
       e.preventDefault();
-      requireAdminPermission(() => {
-        const idInput = document.getElementById('tpl-id').value.trim();
-        // Nếu có ID cũ thì dùng lại ID đó để ghi đè, nếu không thì tạo ID mới
-        const id = idInput ? idInput : ('tpl-' + Date.now());
-        
-        const title = document.getElementById('tpl-title').value.trim();
-        const position = document.getElementById('tpl-position').value;
-        const shift = document.getElementById('tpl-shift').value;
-        const deadline = document.getElementById('tpl-deadline').value;
-        const fineAmount = parseInt(document.getElementById('tpl-fine').value, 10) || 20000;
-        const desc = document.getElementById('tpl-desc').value.trim();
-        
-        // Giữ lại ảnh mẫu cũ nếu đang sửa mà không chọn ảnh mới, ngược lại dùng ảnh mới hoặc ảnh mặc định
-        const existingTpl = appData.templates[id];
-        let sampleImages = tempTplSampleImages.length > 0 ? [...tempTplSampleImages] : null;
-        if (!sampleImages || sampleImages.length === 0) {
-          sampleImages = existingTpl ? extractSampleImages(existingTpl) : [createSampleSvgDataUri(title, position, '#4f46e5')];
-        }
+      const id = document.getElementById('tpl-id').value || ('tpl-' + Date.now());
+      const title = document.getElementById('tpl-title').value.trim();
+      const position = document.getElementById('tpl-position').value;
+      const shift = document.getElementById('tpl-shift').value;
+      const deadline = document.getElementById('tpl-deadline').value;
+      const fineAmount = parseInt(document.getElementById('tpl-fine').value, 10) || 20000;
+      const desc = document.getElementById('tpl-desc').value.trim();
+      const sampleImages = tempTplSampleImages.length > 0 ? [...tempTplSampleImages] : [createSampleSvgDataUri(title, position, '#4f46e5')];
+      const checklistConfig = getChecklistConfigFromBuilder();
 
-        const checklistConfig = getChecklistConfigFromBuilder();
+      const tplData = { id, order: appData.templates[id]?.order || Date.now(), title, position, shift, deadline, fineAmount, desc, sampleImages, sampleUrl: sampleImages[0], checklistConfig };
+      const taskId = 'task-' + id;
+      const existingTask = appData.dailyTasks[taskId];
 
-        const tplData = { 
-          id, 
-          order: existingTpl?.order || Date.now(), 
-          title, 
-          position, 
-          shift, 
-          deadline, 
-          fineAmount, 
-          desc, 
-          sampleImages, 
-          sampleUrl: sampleImages[0], 
-          checklistConfig 
-        };
+      const updates = {};
+      updates[`templates/${id}`] = tplData;
+      updates[`dailyTasks/${taskId}`] = {
+        id: taskId, templateId: id, order: tplData.order, title, position, shift, deadline, fineAmount, desc, sampleImages, sampleUrl: sampleImages[0], checklistConfig,
+        isUrgent: false, status: existingTask ? existingTask.status : 'PENDING', completedBy: existingTask ? existingTask.completedBy : '', completedAt: existingTask ? existingTask.completedAt : '', proofImages: existingTask ? extractProofImages(existingTask) : [], proofImage: existingTask ? (extractProofImages(existingTask)[0] || '') : '', checklistResult: existingTask ? existingTask.checklistResult : {}, note: existingTask ? existingTask.note : ''
+      };
 
-        const taskId = 'task-' + id;
-        const existingTask = appData.dailyTasks[taskId];
-
-        const updates = {};
-        updates[`templates/${id}`] = tplData;
-        
-        // Cập nhật hoặc khởi tạo công việc hằng ngày tương ứng
-        updates[`dailyTasks/${taskId}`] = {
-          id: taskId, 
-          templateId: id, 
-          order: tplData.order, 
-          title, 
-          position, 
-          shift, 
-          deadline, 
-          fineAmount, 
-          desc, 
-          sampleImages, 
-          sampleUrl: sampleImages[0], 
-          checklistConfig,
-          isUrgent: false, 
-          status: existingTask ? existingTask.status : 'PENDING', 
-          completedBy: existingTask ? existingTask.completedBy : '', 
-          completedAt: existingTask ? existingTask.completedAt : '', 
-          proofImages: existingTask ? extractProofImages(existingTask) : [], 
-          proofImage: existingTask ? (extractProofImages(existingTask)[0] || '') : '', 
-          checklistResult: existingTask ? existingTask.checklistResult : {}, 
-          note: existingTask ? existingTask.note : ''
-        };
-
-        rootRef.update(updates).then(() => {
-          closeModal('templateModal');
-          showToast('✅ Đã cập nhật và lưu thành công!');
-        }).catch((err) => {
-          console.error("Lỗi khi lưu:", err);
-          alert('Không thể lưu lên Cloud. Vui lòng kiểm tra lại quyền Quản lý!');
-        });
-      }, 'Lưu chỉnh sửa công việc cố định');
+      rootRef.update(updates);
+      closeModal('templateModal');
+      showToast('Đã lưu!');
     }
 
     function deleteTemplate(tplId) {
